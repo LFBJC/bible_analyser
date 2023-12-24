@@ -1,14 +1,11 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 import os
-import math
-from prompt_toolkit import print_formatted_text, HTML
-from prompt_toolkit.styles import Style
 from sklearn.decomposition import FastICA
 import matplotlib.pyplot as plt
 import re
 def normalize (matrix):
-	center = matrix.mean(0);
+	center = matrix.mean(0)
 	distances = np.array([np.linalg.norm(r-center) for r in matrix])
 	mean_dist = distances.mean()
 	matrix = [(r-center)/mean_dist for r in matrix]
@@ -28,16 +25,16 @@ name_by_abbreviation = {
 	'fm': 'Filemom', 'hb': 'Hebreus', 'tg': 'Tiago', '1pe': '1 Pedro', '2pe': '2 Pedro',
 	'1jo': '1 Joao', '2jo': '2 Joao', '3jo': '3 Joao', 'jd': 'Judas', 'ap': 'Apocalipse'
 }
-books_texts = {};
+books_texts = {}
 for path in os.listdir('by_book'):
-	f = open('by_book\\'+path, 'r', encoding='utf-8');
-	books_texts[path.replace('.txt','')] = f.read();
-	f.close();
-chapters_texts = {};
+	f = open('by_book\\'+path, 'r', encoding='utf-8')
+	books_texts[path.replace('.txt','')] = f.read()
+	f.close()
+chapters_texts = {}
 for path in os.listdir('by_chapter'):
-	f = open('by_chapter\\'+path, 'r', encoding='utf-8');
-	chapters_texts[path] = f.read();
-	f.close();
+	f = open('by_chapter\\'+path, 'r', encoding='utf-8')
+	chapters_texts[path] = f.read()
+	f.close()
 # list of text documents (input for vectorizer)
 full_text = [v for v in books_texts.values()]
 # create the transform
@@ -69,8 +66,8 @@ dim_reducer = FastICA(n_components=2)
 books_dots = dim_reducer.fit_transform(mat1.toarray())
 plt.clf()
 for dot_i in range(len(books_dots)):
-	plt.plot(books_dots[dot_i][0],books_dots[dot_i][1], color=colors[list(books_texts.keys())[dot_i]], marker='o')
-	plt.text(books_dots[dot_i][0],books_dots[dot_i][1],name_by_abbreviation[list(books_texts.keys())[dot_i]])
+	plt.plot(books_dots[dot_i][0],books_dots[dot_i][1], color=colors[list(books_texts.keys())[dot_i].lower()], marker='o')
+	plt.text(books_dots[dot_i][0],books_dots[dot_i][1],name_by_abbreviation[list(books_texts.keys())[dot_i].lower()])
 ax = plt.gca()
 # recompute the ax.dataLim
 ax.relim()
@@ -79,12 +76,13 @@ ax.autoscale_view()
 plt.show()
 #chapters_dots = normalize(dim_reducer.transform(mat2.toarray()))pytho
 chapters_dots = dim_reducer.transform(mat2.toarray())
+print('ap1 vector:', chapters_dots[list(chapters_texts.keys()).index('ap1.txt')])
 plt.clf()
 for dot_i in range(len(chapters_dots)):
 	chapters_doc_name = list(chapters_texts.keys())[dot_i]
 	print(chapters_doc_name)
-	plt.plot(chapters_dots[dot_i][0],chapters_dots[dot_i][1], color=colors[chapters_doc_name[0:re.search("\d*.txt",chapters_doc_name).start()]], marker='o')
-	plt.text(chapters_dots[dot_i][0],chapters_dots[dot_i][1],name_by_abbreviation[chapters_doc_name[0:re.search("\d*.txt",chapters_doc_name).start()]]+(list(chapters_texts.keys())[dot_i][2:].replace('.txt','')))
+	plt.plot(chapters_dots[dot_i][0],chapters_dots[dot_i][1], color=colors[chapters_doc_name[0:re.search("\d*.txt",chapters_doc_name).start()].lower()], marker='o')
+	plt.text(chapters_dots[dot_i][0],chapters_dots[dot_i][1],name_by_abbreviation[chapters_doc_name[0:re.search("\d*.txt",chapters_doc_name).start()].lower()]+(list(chapters_texts.keys())[dot_i][2:].replace('.txt','')))
 ax = plt.gca()
 # recompute the ax.dataLim
 ax.relim()
