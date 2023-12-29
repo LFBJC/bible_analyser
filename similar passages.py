@@ -8,16 +8,9 @@ import pandas as pd
 # from sklearn.decomposition import TruncatedSVD
 import matplotlib.pyplot as plt
 import re
-passage_to_be_compared = '1jo1:7'
-include_book = False
-book = re.sub('[0-9]+(\\:[0-9]+)?(\\-[0-9]+)?$', '', passage_to_be_compared)
-print(book)
-def normalize (matrix):
-	center = matrix.mean(0)
-	distances = np.array([np.linalg.norm(r-center) for r in matrix])
-	mean_dist = distances.mean()
-	matrix = [(r-center)/mean_dist for r in matrix]
-	return matrix
+passage_to_be_compared = '1jo2:6-11'
+book = re.sub('[0-9]+(\\:[0-9]+)?(\\-[0-9]+(\\:[0-9]+)?)?$', '', passage_to_be_compared)
+excluded_books = ['1jo', '2jo', '3jo']
 name_by_abbreviation = {
 	'gn': 'Genesis','ex': 'Exodo', 'lv': 'Levitico', 'nm': 'Numeros', 'dt':'Deuteronomio',
 	'js': 'Josue', 'jz': 'Juizes', 'rt': 'Rute', '1sm': '1 Samuel', '2sm': '2 Samuel',
@@ -33,27 +26,6 @@ name_by_abbreviation = {
 	'fm': 'Filemom', 'hb': 'Hebreus', 'tg': 'Tiago', '1pe': '1 Pedro', '2pe': '2 Pedro',
 	'1jo': '1 Joao', '2jo': '2 Joao', '3jo': '3 Joao', 'jd': 'Judas', 'ap': 'Apocalipse'
 }
-full_text = []
-verse_texts = {}
-for path in tqdm(os.listdir('by_verse')):
-	# print(re.sub('[0-9]+_[0-9]+\\.txt', '', path))
-	f = open('by_verse\\'+path, 'r', encoding='utf-8')
-	verse_texts[path] = f.read()
-	full_text.append(verse_texts[path])
-	f.close()
-print('Calculating number of verses by chapter...')
-verses_by_chapter = {
-	verse_txt.split('_')[0]: max([int(v.split('_')[1].replace('.txt', '')) for v in verse_texts.keys() if v.startswith(verse_txt.split('_')[0])])
-	for verse_txt in tqdm(verse_texts.keys())
-}
-# create the transform
-# create the transform
-# vectorizer = TfidfVectorizer()
-# tokenize and build vocab
-# vectorizer.fit(full_text)
-# mat2 = vectorizer.transform([v for v in verse_texts.values()])
-# summarize
-#print(vectorizer.vocabulary_)
 colors = {
 	'gn': '#FF0000','ex': '#7f4040', 'lv': '#4c2b26', 'nm': '#594643', 'dt':'#401100',
 	'js': '#662e1a', 'jz': '#7f5140', 'rt': '#8c7369', '1sm': '#993d00', '2sm': '#4c2a13',
@@ -70,61 +42,52 @@ colors = {
 	'2pe': '#7f2039', '1jo': '#592d39', '2jo': '#66000e', '3jo': '#4c131b', 'jd': '#806064',
 	'ap': '#000000'
 }
-#mat = [v.toarray() for v in list(books_vectors.values())]
-# dim_reducer = TruncatedSVD(n_components=100)
-#verse_dots = normalize(dim_reducer.transform(mat2.toarray()))pytho
-# verse_dots = dim_reducer.fit_transform(mat2.toarray())
-# verse_dots = svds(mat2, k=100)[0]
-print('instantiating model...')
-model = Word2Vec(full_text, vector_size=100, window=5, min_count=1, sg=0)
-print('creating verse dots...')
-verse_dots = [np.mean([model.wv[w] for w in v], axis=0) for v in tqdm(verse_texts.values())]
-verse_dots_df = pd.DataFrame.from_records(verse_dots).to_csv('verse_dots.csv', index=False)
-
-def verses_in_passage(passage):
-	ret = []
-	if '-' in passage:
-		passage_beginning, passage_end = passage.split('-')[0], passage.split('-')[1]
-		initial_chapter = passage_beginning.replace(book, '').split(':')[0]
-		initial_verse = passage_beginning.replace(book + initial_chapter + ':', '')
-		if ':' in passage_end:
-			ending_chapter, ending_verse = passage_end.split(':')[0], passage_end.split(':')[1]
-			if ending_chapter != initial_chapter:
-				ret = [book + initial_chapter + '_' + str(verse) + '.txt' for verse in range(int(initial_verse), verses_by_chapter[book + initial_chapter])]
-				ret += [book + ending_chapter + '_' + str(verse) + '.txt' for verse in range(1, int(ending_verse))]
-			else:
-				ending_verse = passage_end
-				ret = [book + initial_chapter + '_' + str(verse) + '.txt' for verse in range(int(initial_verse), int(ending_verse))]
-		else:
-			ending_verse = passage_end
-			ret = [book + initial_chapter + '_' + str(verse) + '.txt' for verse in range(int(initial_verse), int(ending_verse))]
+if ':' not in passage_to_be_compared:
+	passage_chapters = [1]
+	if '-' in passage_to_be_compared:
+		last_verse = int(passage_to_be_compared.split('-')[1])
 	else:
-		ret = [passage.replace(':', '_') + '.txt']
-	return ret
-
+		last_verse = int(passage_to_be_compared.replace(book, ''))
+elif passage_to_be_compared.count(':') > 1:
+	begin_end_passage = passage_to_be_compared.split('-')
+	begin_chapter = int(begin_end_passage[0].replace(book, '').split(':')[0])
+	end_chapter = int(begin_end_passage[1].replace(book, '').split(':')[0])
+	passage_chapters = range(begin_chapter, end_chapter+1)
+	last_verse = int(passage_to_be_compared.split('-')[1].split(':')[1])
+else:
+	passage_chapters = [int(passage_to_be_compared.split(':')[0].replace(book, ''))]
+	if '-' in passage_to_be_compared:
+		last_verse = int(passage_to_be_compared.split(':')[1].split('-')[1])
+	else:
+		last_verse = int(passage_to_be_compared.split(':')[1])
+verses_by_chapter = pd.read_csv("Verses by chapter.csv")
+verse_dots_df = pd.read_csv('verse_dots.csv')
 
 print('creating a passage dot...')
-verses_to_be_compared = verses_in_passage(passage_to_be_compared)
-verse_dots_passage = list(map(lambda x: list(verse_texts.keys()).index(x), verses_to_be_compared))
-passage_dot = np.mean([verse_dots[x] for x in verse_dots_passage], axis=0)
+same_book = (verse_dots_df['Book'] == book)
+chapter_in_passage = verse_dots_df['Chapter'].map(lambda ch: ch in passage_chapters)
+verse_in_passage = np.logical_and(chapter_in_passage, verse_dots_df[['Chapter', "Verse"]].apply(lambda row: row['Chapter'] != max(passage_chapters) or row['Verse'] <= last_verse, axis=1))
+verse_dots_passage = verse_dots_df[np.logical_and(np.logical_and(same_book, chapter_in_passage), verse_in_passage)]
+passage_dot = verse_dots_passage[[c for c in verse_dots_passage.columns if c not in ['Book', 'Chapter', 'Verse']]].mean()
+verse_dots_df = verse_dots_df[~np.logical_and(np.logical_and(same_book, chapter_in_passage), verse_in_passage)]
+verse_dots_df = verse_dots_df[~verse_dots_df['Book'].isin(excluded_books)]
 print("Calculating close verses...")
-verses_to_consider = sorted(
-	range(len(verse_dots)),
-	key=lambda x: min([np.linalg.norm(np.array(verse_dots[x]) - np.array(verse_dots[v])) for v in verse_dots_passage]) if x not in verse_dots_passage and ((not include_book and (not list(verse_texts.keys())[x].startswith(book))) or include_book) else 3*len(verse_dots)
-)[:10]
+verse_dots_df['distance'] = verse_dots_df[[c for c in verse_dots_passage.columns if c not in ['Book', 'Chapter', 'Verse']]].apply(lambda x: np.linalg.norm(x - passage_dot))
+verse_dots_df = verse_dots_df.sort_values(by='distance')
+verse_dots_df = verse_dots_df.iloc[:10]
 print("Plotting...")
 plt.clf()
 plt.plot(passage_dot[0], passage_dot[1], color='red', marker='^')
-book_abbreviation = re.sub('[0-9]+:[0-9]+(-([0-9]+:)?[0-9]+)?', '', passage_to_be_compared)
-book = name_by_abbreviation[book_abbreviation]
+book_abbreviation = book
+book = name_by_abbreviation[book]
 plt.text(passage_dot[0], passage_dot[1], passage_to_be_compared.replace(book_abbreviation, book))
-for dot_i in tqdm(range(len(verse_dots))):
-	if dot_i in verses_to_consider:
-		verse_doc_name = list(verse_texts.keys())[dot_i]
-		verse_book = re.sub('[0-9]+_[0-9]+\.txt', '', verse_doc_name)
-		print(verse_doc_name)
-		plt.plot(verse_dots[dot_i][0],verse_dots[dot_i][1], color=colors[verse_book], marker='o')
-		plt.text(verse_dots[dot_i][0],verse_dots[dot_i][1],name_by_abbreviation[verse_book] + ' ' +(list(verse_texts.keys())[dot_i][2:].replace('_',':').replace('.txt','')))
+for i, row in tqdm(verse_dots_df.iterrows()):
+	verse_book = row['Book']
+	curr_chapter = row['Chapter']
+	curr_verse = row['Verse']
+	vector = row[[c for c in verse_dots_df.columns if c not in ['Book', "Chapter", "Verse", 'distance']]]
+	plt.plot(vector[0],vector[1], color=colors[verse_book], marker='o')
+	plt.text(vector[0],vector[1], f'{name_by_abbreviation[verse_book]} {curr_chapter}:{curr_verse}')
 ax = plt.gca()
 # recompute the ax.dataLim
 ax.relim()

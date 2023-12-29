@@ -38,15 +38,17 @@ for path in tqdm(os.listdir('by_verse')):
 	full_text.append(verse_texts[path])
 	f.close()
 print('Calculating number of verses by chapter...')
-verses_by_chapter_records = []
+verses_by_chapter_df = pd.DataFrame(columns=['Book', 'Chapter', 'Number of verses'])
 for verse_txt in tqdm(verse_texts.keys()):
-	verses_by_chapter_records.append({
-		'Book': re.sub('[0-9]+$', '', verse_txt.split('_')[0]),
-		'Chapter': re.search('[0-9]+$', verse_txt.split('_')[0]).group(),
-		'Number of verses': max([int(v.split('_')[1].replace('.txt', '')) for v in verse_texts.keys() if v.startswith(verse_txt.split('_')[0])])
-	})
-verses_by_chapter_df = pd.DataFrame.from_records(verses_by_chapter_records)
-verses_by_chapter_records.to_csv("Verses by chapter.csv")
+	current_book = re.sub('[0-9]+$', '', verse_txt.split('_')[0])
+	current_chapter = re.search('[0-9]+$', verse_txt.split('_')[0]).group()
+	if verses_by_chapter_df[np.logical_and(verses_by_chapter_df['Book'] == current_book, verses_by_chapter_df['Chapter'] == current_chapter)].shape[0] > 0:
+		verses_by_chapter_df.append({
+			'Book': current_book,
+			'Chapter': current_chapter,
+			'Number of verses': max([int(v.split('_')[1].replace('.txt', '')) for v in verse_texts.keys() if v.startswith(verse_txt.split('_')[0])])
+		})
+verses_by_chapter_df.to_csv("Verses by chapter.csv")
 # create the transform
 # create the transform
 # vectorizer = TfidfVectorizer()
@@ -55,22 +57,6 @@ verses_by_chapter_records.to_csv("Verses by chapter.csv")
 # mat2 = vectorizer.transform([v for v in verse_texts.values()])
 # summarize
 #print(vectorizer.vocabulary_)
-colors = {
-	'gn': '#FF0000','ex': '#7f4040', 'lv': '#4c2b26', 'nm': '#594643', 'dt':'#401100',
-	'js': '#662e1a', 'jz': '#7f5140', 'rt': '#8c7369', '1sm': '#993d00', '2sm': '#4c2a13',
-	'1rs': '#593000', '2rs': '#99754d', '1cr': '#734d00', '2cr': '#4c3913', 'ed': '#595243',
-	'ne': '#4B0082', 'et': '#998a4d', 'jó': '#4c4a26', 'sl': '#535900', 'pv': '#7d8060',
-	'ec': '#FF8C00','ct': '#305900','is': '#384030', 'jr': '#3e592d', 'lm': '#598c46',
-	'ez': '#608068', 'dn': '#005924','os': '#009952', 'jl': '#134d32', 'am': '#269982',
-	'ob': '#2d5956', 'jn': '#268299', 'mq': '#607980', 'na': '#005580', 'hc': '#2d4a59',
-	'sf': '#13324d', 'ag': '#003380', 'zc': '#234d8c', 'ml': '#606c80', 'mt': '#131b4d',
-	'mc': '#0000FF', 'lc': '#000040', 'jo': '#332d59', 'atos': '#464359', 'rm': '#290066',
-	'1co': '#4d238c', '2co': '#6c468c', 'gl': '#301040', 'ef': '#756080', 'fp': '#7a0099',
-	'cl': '#520066', '1ts': '#802079', '2ts': '#660052', '1tm': '#592d50', '2tm': '#40303a',
-	'tt': '#992663', 'fm': '#4d1332', 'hb': '#997387', 'tg': '#8c4662', '1pe': '#990029',
-	'2pe': '#7f2039', '1jo': '#592d39', '2jo': '#66000e', '3jo': '#4c131b', 'jd': '#806064',
-	'ap': '#000000'
-}
 #mat = [v.toarray() for v in list(books_vectors.values())]
 # dim_reducer = TruncatedSVD(n_components=100)
 #verse_dots = normalize(dim_reducer.transform(mat2.toarray()))pytho
@@ -79,10 +65,13 @@ colors = {
 print('instantiating model...')
 model = Word2Vec(full_text, vector_size=100, window=5, min_count=1, sg=0)
 print('creating verse dots...')
+verse_to_dots_records = []
 for k, v in tqdm(verse_texts.items()):
-	verse_dots_records.append(dict(np.mean([model.wv[w] for w in v], axis=0)))
-	verse_to_dots_records[-1]['Book'] = re.sub('[0-9]+$', '', verse_txt.split('_')[0])
-	verse_to_dots_records[-1]['Chapter'] = re.search('[0-9]+$', verse_txt.split('_')[0]).group()
-	verse_to_dots_records[-1]['Verse'] = verse_txt.split('_')[1]
-verse_dots_df = pd.DataFrame.from_records(verse_dots)
+	verse_to_dots_records.append({
+		'Book': re.sub('[0-9]+$', '', k.split('_')[0]),
+		'Chapter': int(re.search('[0-9]+$', k.split('_')[0]).group()),
+		'Verse': int(k.split('_')[1].replace('.txt', '')),
+		**{i: v for i, v in enumerate(np.mean([model.wv[w] for w in v], axis=0))}
+	})
+verse_dots_df = pd.DataFrame.from_records(verse_to_dots_records)
 verse_dots_df.to_csv('verse_dots.csv', index=False)
