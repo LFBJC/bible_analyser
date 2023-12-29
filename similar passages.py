@@ -8,9 +8,10 @@ import pandas as pd
 # from sklearn.decomposition import TruncatedSVD
 import matplotlib.pyplot as plt
 import re
-passage_to_be_compared = '1jo2:6-11'
+passage_to_be_compared = '1co1:1-16:24'
+max_passages = 100
 book = re.sub('[0-9]+(\\:[0-9]+)?(\\-[0-9]+(\\:[0-9]+)?)?$', '', passage_to_be_compared)
-excluded_books = ['1jo', '2jo', '3jo']
+excluded_books = ['1jo']
 name_by_abbreviation = {
 	'gn': 'Genesis','ex': 'Exodo', 'lv': 'Levitico', 'nm': 'Numeros', 'dt':'Deuteronomio',
 	'js': 'Josue', 'jz': 'Juizes', 'rt': 'Rute', '1sm': '1 Samuel', '2sm': '2 Samuel',
@@ -74,20 +75,84 @@ verse_dots_df = verse_dots_df[~verse_dots_df['Book'].isin(excluded_books)]
 print("Calculating close verses...")
 verse_dots_df['distance'] = verse_dots_df[[c for c in verse_dots_passage.columns if c not in ['Book', 'Chapter', 'Verse']]].apply(lambda x: np.linalg.norm(x - passage_dot))
 verse_dots_df = verse_dots_df.sort_values(by='distance')
-verse_dots_df = verse_dots_df.iloc[:10]
+def verse_in_passage_function(verse, passage):
+	return np.logical_and(
+		verse['Book'] == passage['Book'],
+		np.logical_and(
+			passage['Initial Chapter'] < verse['Chapter'] < passage['Last Chapter'],
+			passage['Initial Verse'] < verse['Verse'] < passage['Last Verse']
+		)
+	)
+passages = pd.DataFrame()
+i = 0
+while i < verse_dots_df.shape[0] and passages.shape[0] < max_passages:
+	row = verse_dots_df.iloc[i]
+	next_different_passage = next(
+		j for j in range(i, verse_dots_df.shape[0])
+		if verse_dots_df['Book'].iloc[j] != row['Book'] or verse_dots_df["Chapter"].iloc[j] != row["Chapter"] or\
+		(
+			(verse_dots_df["Chapter"].iloc[j] == row["Chapter"] + 1) and
+			not (verses_by_chapter[
+				np.logical_and(verses_by_chapter["Book"] == row["Book"],
+							   verses_by_chapter['Chapter'] == row['Chapter'])
+			]['Number of verses'].iloc[0] in verse_dots_df.iloc[i:j]['Verse'].values)
+		) and not passages.map(lambda x: verse_in_passage_function(verse_dots_df.iloc[j], x)).any()
+	)
+	passages = pd.concat([
+		passages, pd.DataFrame([{
+			'Book': row['Book'],
+			'Initial_Chapter': min(verse_dots_df['Chapter'].iloc[i:next_different_passage]),
+			'Initial_Verse': min(verse_dots_df['Verse'].iloc[i:next_different_passage]),
+			"Last_Chapter": max(verse_dots_df['Chapter'].iloc[i:next_different_passage]),
+			'Last_Verse': max(verse_dots_df['Verse'].iloc[i:next_different_passage]),
+			**{c: verse_dots_df[c].iloc[i:next_different_passage].mean() for c in verse_dots_passage.columns if c not in ['Book', 'Chapter', 'Verse', 'distance']}
+		}])
+	], ignore_index=True)
+	remove = []
+	for j in passages.index:
+		if j not in remove:
+			pass_j = passages.iloc[j]
+			for k in passages.index:
+				if k not in remove and passages.loc[k, 'Book'] == passages.loc[j, 'Book']:
+					if passages['Initial_Chapter'].loc[k] == pass_j['Last_Chapter'] + 1:
+						if pass_j['Last_Verse'] == verses_by_chapter[
+								np.logical_and(verses_by_chapter["Book"] == pass_j["Book"],
+											   verses_by_chapter['Chapter'] == pass_j['Last_Chapter'])
+							]['Number of verses'].iloc[0]:
+							passages.at[j, 'Last_Chapter'] = passages.loc[k]['Last_Chapter']
+							passages.at[j, 'Last_Verse'] = passages.iloc[k]['Last_Verse']
+							remove.append(k)
+							break
+					elif passages['Last_Chapter'].loc[k] == pass_j['Initial_Chapter'] - 1:
+						if passages['Last_Verse'].loc[k] == verses_by_chapter[
+							np.logical_and(verses_by_chapter["Book"] == pass_j["Book"],
+										   verses_by_chapter['Chapter'] == pass_j['Initial_Chapter'])
+						]['Number of verses'].iloc[0]:
+							passages.at[j, 'Initial_Chapter'] = passages.loc[k]['Initial_Chapter']
+							passages.at[j, 'Initial_Verse'] = passages.loc[k]['Initial_Verse']
+							remove.append(k)
+							break
+	passages = passages.drop(index=remove)
+	i = next_different_passage
+del verse_dots_df
 print("Plotting...")
 plt.clf()
 plt.plot(passage_dot[0], passage_dot[1], color='red', marker='^')
 book_abbreviation = book
 book = name_by_abbreviation[book]
 plt.text(passage_dot[0], passage_dot[1], passage_to_be_compared.replace(book_abbreviation, book))
-for i, row in tqdm(verse_dots_df.iterrows()):
+for i, row in tqdm(passages.iterrows()):
 	verse_book = row['Book']
-	curr_chapter = row['Chapter']
-	curr_verse = row['Verse']
-	vector = row[[c for c in verse_dots_df.columns if c not in ['Book', "Chapter", "Verse", 'distance']]]
+	if row['Initial_Chapter'] == row['Last_Chapter']:
+		if row['Initial_Verse'] == row['Last_Verse']:
+			passage_string = str(row['Initial_Chapter']) + ':' + str(row['Initial_Verse'])
+		else:
+			passage_string = str(row['Initial_Chapter']) + ':' + str(row['Initial_Verse']) + '-' + str(row["Last_Verse"])
+	else:
+		passage_string = str(row['Initial_Chapter']) + ':' + str(row['Initial_Verse']) + '-' + str(row['Last_Chapter']) + ':' + str(row["Last_Verse"])
+	vector = row[[c for c in passages.columns if c not in ['Book', "Initial_Chapter", "Initial_Verse", "Last_Chapter", "Last_Verse", 'distance']]]
 	plt.plot(vector[0],vector[1], color=colors[verse_book], marker='o')
-	plt.text(vector[0],vector[1], f'{name_by_abbreviation[verse_book]} {curr_chapter}:{curr_verse}')
+	plt.text(vector[0],vector[1], f'{name_by_abbreviation[verse_book]} {passage_string}')
 ax = plt.gca()
 # recompute the ax.dataLim
 ax.relim()

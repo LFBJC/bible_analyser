@@ -42,13 +42,16 @@ verses_by_chapter_df = pd.DataFrame(columns=['Book', 'Chapter', 'Number of verse
 for verse_txt in tqdm(verse_texts.keys()):
 	current_book = re.sub('[0-9]+$', '', verse_txt.split('_')[0])
 	current_chapter = re.search('[0-9]+$', verse_txt.split('_')[0]).group()
-	if verses_by_chapter_df[np.logical_and(verses_by_chapter_df['Book'] == current_book, verses_by_chapter_df['Chapter'] == current_chapter)].shape[0] > 0:
-		verses_by_chapter_df.append({
-			'Book': current_book,
-			'Chapter': current_chapter,
-			'Number of verses': max([int(v.split('_')[1].replace('.txt', '')) for v in verse_texts.keys() if v.startswith(verse_txt.split('_')[0])])
-		})
-verses_by_chapter_df.to_csv("Verses by chapter.csv")
+	if verses_by_chapter_df[np.logical_and(verses_by_chapter_df['Book'] == current_book, verses_by_chapter_df['Chapter'] == current_chapter)].shape[0] == 0:
+		verses_by_chapter_df=pd.concat([
+			verses_by_chapter_df,
+			pd.DataFrame.from_records([{
+				'Book': current_book,
+				'Chapter': current_chapter,
+				'Number of verses': max([int(v.split('_')[1].replace('.txt', '')) for v in verse_texts.keys() if v.startswith(verse_txt.split('_')[0])])
+			}])
+		])
+verses_by_chapter_df.to_csv("Verses by chapter.csv", index=False)
 # create the transform
 # create the transform
 # vectorizer = TfidfVectorizer()
